@@ -5,6 +5,7 @@ Optimized for Ubuntu & Render deployment
 """
 
 from telethon import TelegramClient, events, Button
+from telethon.sessions import StringSession
 from telethon.tl.types import InputChannel
 import asyncio
 import json
@@ -127,9 +128,39 @@ def save_config(config):
 config = load_config()
 
 # ============================================
+# SESSION HANDLING (File or String)
+# ============================================
+def get_session():
+    """Get session - prioritize string session from env"""
+    session_string = os.getenv('SESSION_STRING')
+    
+    if session_string:
+        logger.info("🔑 Using StringSession from environment")
+        return StringSession(session_string)
+    
+    # Fallback to file session
+    session_b64 = os.getenv('SESSION_DATA')
+    if session_b64 and not os.path.exists(f"{SESSION_FILE}.session"):
+        try:
+            import base64
+            session_bytes = base64.b64decode(session_b64)
+            with open(f"{SESSION_FILE}.session", 'wb') as f:
+                f.write(session_bytes)
+            logger.info("✅ Session file created from SESSION_DATA")
+        except Exception as e:
+            logger.error(f"❌ Error creating session file: {e}")
+    
+    if os.path.exists(f"{SESSION_FILE}.session"):
+        logger.info("📁 Using file session")
+        return SESSION_FILE
+    
+    logger.warning("⚠️ No session found - will need to authenticate")
+    return SESSION_FILE
+
+# ============================================
 # INITIALIZE CLIENT
 # ============================================
-client = TelegramClient(SESSION_FILE, API_ID, API_HASH)
+client = TelegramClient(get_session(), API_ID, API_HASH)
 
 # ============================================
 # KEEP-ALIVE FOR RENDER
@@ -702,7 +733,22 @@ async def main():
     
     try:
         logger.info("📱 Connecting to Telegram...")
-        await client.start(phone=PHONE)
+        
+        # Connect without starting (no phone prompt)
+        await client.connect()
+        
+        # Check if authorized
+        if not await client.is_user_authorized():
+            logger.error("❌ Not authorized!")
+            logger.error("=" * 50)
+            logger.error("⚠️ You need to generate a session first!")
+            logger.error("")
+            logger.error("📋 Steps to fix:")
+            logger.error("1. Run string_session_generator.py locally")
+            logger.error("2. Copy the session string")
+            logger.error("3. Add to Render env: SESSION_STRING=your_string")
+            logger.error("=" * 50)
+            return
         
         me = await client.get_me()
         logger.info(f"✅ Connected as: {me.first_name}")
