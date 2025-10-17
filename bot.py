@@ -321,20 +321,21 @@ async def start_handler(event):
         "🆔 Works with Channel IDs\n"
         "🖥️ Running on Ubuntu/Render\n\n"
         f"📊 Total Forwarded: {config['forwarded_count']}\n"
+        f"🔄 Resume from ID: {config['last_forwarded_id'] + 1}\n"
         f"Status: {status}\n\n"
         f"{source_info}\n"
         f"{dest_info}\n\n"
         "**Main Commands:**\n"
-        "`/forward` - Start forwarding\n"
+        "`/forward` - Start/Resume forwarding\n"
         "`/stopforward` - Stop forwarding\n"
-        "`/auto on/off` - Toggle auto-forward\n"
-        "`/status` - Check status\n\n"
+        "`/progress` - Check progress\n"
+        "`/status` - Full status\n\n"
         "**Speed Settings:**\n"
         "`/speed balanced` - Recommended ⭐\n"
-        "`/speed fast` - Faster forwarding\n"
-        "`/delay [seconds]` - Set message delay\n"
-        "`/batchsize [number]` - Set batch size\n"
-        "`/batchdelay [seconds]` - Set batch delay\n\n"
+        "`/speed fast` - Faster forwarding\n\n"
+        "**Resume Control:**\n"
+        "`/reset confirm` - Start from beginning\n"
+        "`/setid [number]` - Set start point\n\n"
         "**Setup:**\n"
         "`/source [ID]` - Set source\n"
         "`/dest [ID]` - Set destination",
@@ -665,7 +666,75 @@ async def status_command(event):
     )
     await event.respond(status_msg)
 
-@client.on(events.NewMessage(pattern='/delay', from_users=ADMIN_ID))
+@client.on(events.NewMessage(pattern='/reset', from_users=ADMIN_ID))
+async def reset_command(event):
+    """Reset forwarding progress"""
+    try:
+        confirm = event.text.split()[1].lower() if len(event.text.split()) > 1 else ""
+        
+        if confirm == "confirm":
+            old_count = config['forwarded_count']
+            old_id = config['last_forwarded_id']
+            
+            config['last_forwarded_id'] = 0
+            config['forwarded_count'] = 0
+            save_config(config)
+            
+            await event.respond(
+                f"✅ **Progress Reset!**\n\n"
+                f"Previous:\n"
+                f"📊 Count: {old_count}\n"
+                f"🔄 Last ID: {old_id}\n\n"
+                f"New:\n"
+                f"📊 Count: 0\n"
+                f"🔄 Last ID: 0\n\n"
+                f"Next `/forward` will start from beginning!"
+            )
+            logger.info("🔄 Progress reset to 0")
+        else:
+            await event.respond(
+                f"⚠️ **Reset Progress?**\n\n"
+                f"Current progress:\n"
+                f"📊 Forwarded: {config['forwarded_count']}\n"
+                f"🔄 Last ID: {config['last_forwarded_id']}\n\n"
+                f"This will start forwarding from the beginning.\n"
+                f"⚠️ May create duplicates!\n\n"
+                f"To confirm: `/reset confirm`"
+            )
+    except Exception as e:
+        await event.respond(f"❌ Error: {e}")
+
+@client.on(events.NewMessage(pattern='/setid', from_users=ADMIN_ID))
+async def setid_command(event):
+    """Set custom starting message ID"""
+    try:
+        msg_id = int(event.text.split()[1])
+        
+        if msg_id < 0:
+            msg_id = 0
+        
+        old_id = config['last_forwarded_id']
+        config['last_forwarded_id'] = msg_id
+        save_config(config)
+        
+        await event.respond(
+            f"✅ **Starting ID Updated!**\n\n"
+            f"Previous ID: {old_id}\n"
+            f"New ID: {msg_id}\n\n"
+            f"Next `/forward` will start from message {msg_id + 1}"
+        )
+        logger.info(f"🔄 Starting ID set to: {msg_id}")
+        
+    except (IndexError, ValueError):
+        await event.respond(
+            f"❌ **Usage:** `/setid [message_id]`\n\n"
+            f"Current last ID: {config['last_forwarded_id']}\n\n"
+            f"**Examples:**\n"
+            f"`/setid 0` - Start from beginning\n"
+            f"`/setid 5000` - Start from message 5001"
+        )
+
+@client.on(events.NewMessage(pattern='/progress', from_users=ADMIN_ID))
 async def set_delay(event):
     try:
         delay = int(event.text.split()[1])
