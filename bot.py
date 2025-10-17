@@ -237,7 +237,7 @@ async def get_channel_info(channel_id):
 # SAFE FORWARDING WITH ANTI-SPAM
 # ============================================
 async def safe_forward(client, source_id, dest_id, start_id=0):
-    """Safely forward messages with anti-spam measures"""
+    """Safely forward messages with anti-spam measures - NO FORWARD TAG"""
     try:
         logger.info(f"🚀 Starting forward from {source_id} to {dest_id}")
         source = await client.get_entity(source_id)
@@ -259,8 +259,14 @@ async def safe_forward(client, source_id, dest_id, start_id=0):
                     continue
             
             try:
-                # Forward message
-                await client.forward_messages(dest, message)
+                # Send as new message (NO FORWARD TAG)
+                await client.send_message(
+                    dest,
+                    message.text if message.text else "",
+                    file=message.media if message.media else None,
+                    formatting_entities=message.entities
+                )
+                
                 forwarded += 1
                 batch_count += 1
                 config['forwarded_count'] += 1
@@ -708,7 +714,15 @@ async def auto_forward_handler(event):
         if event.chat_id == config['source_channel'] and config['destination_channel']:
             await asyncio.sleep(config['forward_delay'])
             dest = await client.get_entity(config['destination_channel'])
-            await client.forward_messages(dest, event.message)
+            
+            # Send as new message (NO FORWARD TAG)
+            await client.send_message(
+                dest,
+                event.message.text if event.message.text else "",
+                file=event.message.media if event.message.media else None,
+                formatting_entities=event.message.entities
+            )
+            
             config['forwarded_count'] += 1
             config['last_forwarded_id'] = event.message.id
             save_config(config)
