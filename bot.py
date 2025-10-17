@@ -324,12 +324,18 @@ async def start_handler(event):
         f"Status: {status}\n\n"
         f"{source_info}\n"
         f"{dest_info}\n\n"
-        "**Commands:**\n"
+        "**Main Commands:**\n"
         "`/forward` - Start forwarding\n"
         "`/stopforward` - Stop forwarding\n"
-        "`/auto on` - Enable auto-forward\n"
-        "`/auto off` - Disable auto-forward\n"
-        "`/status` - Check status\n"
+        "`/auto on/off` - Toggle auto-forward\n"
+        "`/status` - Check status\n\n"
+        "**Speed Settings:**\n"
+        "`/speed balanced` - Recommended ⭐\n"
+        "`/speed fast` - Faster forwarding\n"
+        "`/delay [seconds]` - Set message delay\n"
+        "`/batchsize [number]` - Set batch size\n"
+        "`/batchdelay [seconds]` - Set batch delay\n\n"
+        "**Setup:**\n"
         "`/source [ID]` - Set source\n"
         "`/dest [ID]` - Set destination",
         buttons=get_main_menu()
@@ -668,9 +674,119 @@ async def set_delay(event):
         config['forward_delay'] = delay
         save_config(config)
         logger.info(f"⏱️ Delay set: {delay}s")
-        await event.respond(f"✅ Delay: {delay}s")
+        await event.respond(f"✅ Message delay: {delay}s")
     except:
-        await event.respond("❌ Usage: `/delay 3`")
+        await event.respond(
+            f"❌ Usage: `/delay [seconds]`\n\n"
+            f"Current: {config['forward_delay']}s\n"
+            f"Recommended: 2-3s"
+        )
+
+@client.on(events.NewMessage(pattern='/batchsize', from_users=ADMIN_ID))
+async def set_batch_size(event):
+    try:
+        size = int(event.text.split()[1])
+        if size < 10:
+            size = 10
+        if size > 200:
+            size = 200
+        config['batch_size'] = size
+        save_config(config)
+        logger.info(f"📦 Batch size set: {size}")
+        await event.respond(
+            f"✅ Batch size: {size} messages\n"
+            f"⏰ Batch delay: {config['batch_delay']}s"
+        )
+    except:
+        await event.respond(
+            f"❌ Usage: `/batchsize [number]`\n\n"
+            f"Current: {config['batch_size']}\n"
+            f"Range: 10-200\n"
+            f"Recommended: 100"
+        )
+
+@client.on(events.NewMessage(pattern='/batchdelay', from_users=ADMIN_ID))
+async def set_batch_delay(event):
+    try:
+        delay = int(event.text.split()[1])
+        if delay < 30:
+            delay = 30
+        config['batch_delay'] = delay
+        save_config(config)
+        logger.info(f"⏰ Batch delay set: {delay}s")
+        await event.respond(
+            f"✅ Batch delay: {delay}s ({delay//60} min {delay%60}s)\n"
+            f"📦 Batch size: {config['batch_size']}"
+        )
+    except:
+        await event.respond(
+            f"❌ Usage: `/batchdelay [seconds]`\n\n"
+            f"Current: {config['batch_delay']}s\n"
+            f"Recommended: 120s (2 min)"
+        )
+
+@client.on(events.NewMessage(pattern='/speed', from_users=ADMIN_ID))
+async def set_speed_preset(event):
+    """Quick speed presets"""
+    try:
+        preset = event.text.split()[1].lower()
+        
+        if preset == 'safe':
+            config['forward_delay'] = 3
+            config['batch_size'] = 50
+            config['batch_delay'] = 300
+            desc = "🐢 Safe Mode - Slowest, safest"
+            
+        elif preset == 'balanced':
+            config['forward_delay'] = 2
+            config['batch_size'] = 100
+            config['batch_delay'] = 120
+            desc = "⚖️ Balanced - Good speed, very safe"
+            
+        elif preset == 'fast':
+            config['forward_delay'] = 1
+            config['batch_size'] = 150
+            config['batch_delay'] = 90
+            desc = "🚀 Fast - High speed, small risk"
+            
+        elif preset == 'turbo':
+            config['forward_delay'] = 1
+            config['batch_size'] = 200
+            config['batch_delay'] = 60
+            desc = "⚡ Turbo - Maximum speed, moderate risk"
+            
+        else:
+            await event.respond(
+                "❌ Invalid preset!\n\n"
+                "Available presets:\n"
+                "`/speed safe` - Slowest, safest\n"
+                "`/speed balanced` - Recommended ⭐\n"
+                "`/speed fast` - Quick, low risk\n"
+                "`/speed turbo` - Fastest, risky"
+            )
+            return
+        
+        save_config(config)
+        await event.respond(
+            f"✅ {desc}\n\n"
+            f"⏱️ Message delay: {config['forward_delay']}s\n"
+            f"📦 Batch size: {config['batch_size']}\n"
+            f"⏰ Batch delay: {config['batch_delay']}s"
+        )
+        
+    except IndexError:
+        await event.respond(
+            "⚙️ **Speed Presets:**\n\n"
+            f"Current settings:\n"
+            f"⏱️ Delay: {config['forward_delay']}s\n"
+            f"📦 Batch: {config['batch_size']}\n"
+            f"⏰ Rest: {config['batch_delay']}s\n\n"
+            "**Available presets:**\n"
+            "`/speed safe` - 🐢 Safest (3 days)\n"
+            "`/speed balanced` - ⚖️ Recommended (1.5 days) ⭐\n"
+            "`/speed fast` - 🚀 Quick (18 hours)\n"
+            "`/speed turbo` - ⚡ Fastest (12 hours, risky)"
+        )
 
 # ============================================
 # FORWARDING TASK
